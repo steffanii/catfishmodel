@@ -1,99 +1,101 @@
 // ════════════════════════════════════════════════════════════════
-// CatfishIQ — React Frontend (White & Green Dashboard)
+// CatfishIQ — React Frontend (Dark Professional Dashboard)
+// Connects to Flask backend on http://localhost:5000
 // ════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:5000";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
-// ── Color maps (green theme) ─────────────────────────────────────
-const WQI_COLOR = {
-  Optimal: { hex: "#1a6b3a", track: "#1a6b3a" },
-  Good: { hex: "#2d9e5f", track: "#2d9e5f" },
-  Fair: { hex: "#d97706", track: "#d97706" },
-  Poor: { hex: "#ea580c", track: "#ea580c" },
-  Critical: { hex: "#dc2626", track: "#dc2626" },
+// ── Color maps ───────────────────────────────────────────────────
+const WQI_COLORS = {
+  Optimal: "#1D9E75",
+  Good: "#5DCAA5",
+  Fair: "#EF9F27",
+  Poor: "#E24B4A",
+  Critical: "#A32D2D",
 };
 
-const PRIORITY_BORDER = {
-  URGENT: "#dc2626",
-  HIGH: "#d97706",
-  ROUTINE: "#1a6b3a",
-  NONE: "#1a6b3a",
+const PRIORITY_CLASS = {
+  URGENT: {
+    card: "rec-card-urgent",
+    badge: "badge-urgent",
+    param: "rec-param-urgent",
+  },
+  HIGH: { card: "rec-card-high", badge: "badge-high", param: "rec-param-high" },
+  ROUTINE: {
+    card: "rec-card-routine",
+    badge: "badge-routine",
+    param: "rec-param-routine",
+  },
+  NONE: { card: "rec-card-none", badge: "badge-none", param: "rec-param-none" },
 };
 
-const SHAP_COLORS = {
-  positive: "#1a6b3a",
-  negative: "#dc2626",
-};
-
-function shortName(p) {
-  return p
-    .replace("Temperature (C)", "Temperature")
+// Shorten parameter names for display
+function shortName(param) {
+  return param
+    .replace("Temperature (C)", "Temp")
     .replace("Turbidity(NTU)", "Turbidity")
-    .replace("DO(mg/L)", "Dissolved Oxygen")
+    .replace("DO(mg/L)", "DO")
     .replace("PH", "pH")
     .replace("Ammonia(mg/L)", "Ammonia")
     .replace("Nitrate(mg/L)", "Nitrate");
 }
 
+// ── FORM FIELDS CONFIG ────────────────────────────────────────────
 const FIELDS = [
   {
     name: "temperature",
-    label: "Temperature",
-    hint: "°C · Optimal: 24–30",
+    label: "Temperature (°C)",
     placeholder: "e.g. 28.5",
-  },
-  {
-    name: "do",
-    label: "Dissolved Oxygen",
-    hint: "mg/L · Min: ≥5.0",
-    placeholder: "e.g. 5.2",
-  },
-  {
-    name: "ph",
-    label: "pH",
-    hint: "Optimal: 6.5–8.5",
-    placeholder: "e.g. 7.1",
-  },
-  {
-    name: "ammonia",
-    label: "Ammonia",
-    hint: "mg/L · Max: 0.05",
-    placeholder: "e.g. 0.04",
-  },
-  {
-    name: "nitrate",
-    label: "Nitrate",
-    hint: "mg/L · Max: 10",
-    placeholder: "e.g. 3.2",
+    min: 20,
+    max: 35,
   },
   {
     name: "turbidity",
-    label: "Turbidity",
-    hint: "NTU · Max: 50",
-    placeholder: "e.g. 42",
+    label: "Turbidity (NTU)",
+    placeholder: "e.g. 55.0",
+    min: 0,
+    max: 100,
+  },
+  { name: "do", label: "DO (mg/L)", placeholder: "e.g. 3.8", min: 0, max: 15 },
+  { name: "ph", label: "pH", placeholder: "e.g. 7.9", min: 4, max: 12 },
+  {
+    name: "ammonia",
+    label: "Ammonia (mg/L)",
+    placeholder: "e.g. 0.09",
+    min: 0,
+    max: 8,
+  },
+  {
+    name: "nitrate",
+    label: "Nitrate (mg/L)",
+    placeholder: "e.g. 14.0",
+    min: 0,
+    max: 20,
   },
 ];
 
-const WQI_CLASSES = ["Critical", "Poor", "Fair", "Good", "Optimal"];
-
+// ════════════════════════════════════════════════════════════════
+// MAIN APP COMPONENT
 // ════════════════════════════════════════════════════════════════
 export default function App() {
   const [form, setForm] = useState({
     temperature: "",
+    turbidity: "",
     do: "",
     ph: "",
     ammonia: "",
     nitrate: "",
-    turbidity: "",
   });
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showForm, setShowForm] = useState(true);
   const [backendOk, setBackendOk] = useState(null);
 
+  // Health check on mount
   useEffect(() => {
     fetch(`${API_URL}/health`)
       .then((r) => r.json())
@@ -105,14 +107,17 @@ export default function App() {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handlePredict = async () => {
-    for (const f of FIELDS) {
-      if (form[f.name] === "" || isNaN(parseFloat(form[f.name]))) {
-        setError(`Enter a valid number for "${f.label}"`);
+    // Validate all fields
+    for (const field of FIELDS) {
+      const val = form[field.name];
+      if (val === "" || isNaN(parseFloat(val))) {
+        setError(`Please enter a valid number for "${field.label}"`);
         return;
       }
     }
     setError(null);
     setLoading(true);
+
     try {
       const payload = Object.fromEntries(
         FIELDS.map((f) => [f.name, parseFloat(form[f.name])]),
@@ -125,13 +130,7 @@ export default function App() {
       const data = await res.json();
       if (data.success) {
         setResult(data);
-        setTimeout(
-          () =>
-            document
-              .getElementById("results")
-              ?.scrollIntoView({ behavior: "smooth" }),
-          100,
-        );
+        setShowForm(false);
       } else {
         setError(data.error || "Prediction failed");
       }
@@ -145,359 +144,293 @@ export default function App() {
 
   const handleReset = () => {
     setResult(null);
-    setForm({
-      temperature: "",
-      do: "",
-      ph: "",
-      ammonia: "",
-      nitrate: "",
-      turbidity: "",
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setShowForm(true);
   };
 
-  const wqiCol = result
-    ? WQI_COLOR[result.wqi_class] || WQI_COLOR.Fair
-    : WQI_COLOR.Fair;
-  const trackPct = result ? Math.min(Math.max(result.wqi_score, 0), 100) : 0;
+  // Derived values
+  const wqiColor = result
+    ? WQI_COLORS[result.wqi_class] || "#94a3b8"
+    : "#378ADD";
   const maxShap = result
     ? Math.max(...result.layer_a.map((d) => d.magnitude), 0.001)
     : 1;
 
   return (
     <div className="app">
-      {/* ── NAV ─────────────────────────────────────────────── */}
-      <nav className="nav">
-        <div className="logo">
-          Catfish<span>IQ</span>
+      {/* ═══════════════════════════════════════════════════════
+          HEADER
+          ═══════════════════════════════════════════════════════ */}
+      <header className="header">
+        <div className="header-left">
+          <span className="header-fish">🐟</span>
+          <div>
+            <div className="header-title">
+              CatfishIQ — Water Quality Monitor
+            </div>
+            <div className="header-sub">
+              ANN model · R² 0.9928 · Layers A & B active
+              {backendOk !== null && (
+                <span
+                  style={{
+                    marginLeft: 10,
+                    color: backendOk ? "#1D9E75" : "#E24B4A",
+                  }}
+                >
+                  · backend {backendOk ? "connected" : "offline"}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="nav-meta">
-          <span>ANN Model</span>
-          <span>R² = 0.9928</span>
-          <span>AHP Weights</span>
-          {backendOk !== null && (
-            <span className={backendOk ? "status-ok" : "status-err"}>
-              ● {backendOk ? "Backend connected" : "Backend offline"}
+        <div className="header-right">
+          <div className="live-dot"></div>
+          <span className="live-text">Live monitoring</span>
+        </div>
+      </header>
+
+      <main className="main">
+        {/* ═══════════════════════════════════════════════════
+            INPUT FORM
+            ═══════════════════════════════════════════════════ */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-label">Sensor readings</span>
+            <span
+              className="collapse-toggle"
+              onClick={() => setShowForm((s) => !s)}
+              role="button"
+              aria-label="Toggle form"
+            >
+              {showForm ? "▲ collapse" : "▼ expand"}
             </span>
-          )}
-        </div>
-      </nav>
+          </div>
 
-      {/* ── HERO ─────────────────────────────────────────────── */}
-      <div className="hero">
-        <h1>
-          Catfish Water Quality <span>Prediction System</span>
-        </h1>
-        <p>
-          AHP-weighted Water Quality Index · ANN (R² = 0.9928) · Layers A, B, C
-        </p>
-        <div className="kpis">
-          <div className="kpi">
-            <div className="kpi-num">0.9928</div>
-            <div className="kpi-lbl">R² Accuracy</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-num">ANN</div>
-            <div className="kpi-lbl">Best Model</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-num">AHP</div>
-            <div className="kpi-lbl">Weight Method</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-num">6</div>
-            <div className="kpi-lbl">Parameters</div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── INPUT FORM ───────────────────────────────────────── */}
-      <div className="section" style={{ marginTop: 24 }}>
-        <div className="card full-width">
-          <div className="card-title">🧪 Sensor Input Parameters</div>
-          <div className="form-grid">
-            {FIELDS.map((f) => (
-              <div key={f.name} className="fg">
-                <label>{f.label}</label>
-                <input
-                  type="number"
-                  name={f.name}
-                  value={form[f.name]}
-                  onChange={handleChange}
-                  placeholder={f.placeholder}
-                  step="0.01"
-                />
-                <div className="hint">{f.hint}</div>
-              </div>
-            ))}
-          </div>
-          {error && <div className="error-msg">{error}</div>}
-          <button className="btn" onClick={handlePredict} disabled={loading}>
-            {loading ? "Predicting…" : "⚡ Predict Water Quality Index"}
-          </button>
-        </div>
-      </div>
-
-      {/* ── RESULTS ─────────────────────────────────────────── */}
-      {result && (
-        <div id="results" className="results-area">
-          {/* ROW 1 — WQI Score + Parameter Status */}
-          <div className="section grid-2">
-            <div className="card">
-              <div className="card-title">📊 Prediction Result</div>
-              <div className="score-big">
-                <div className="score-num" style={{ color: wqiCol.hex }}>
-                  {result.wqi_score}
-                </div>
-                <div className="score-cls" style={{ color: wqiCol.hex }}>
-                  {result.wqi_class.toUpperCase()}
-                </div>
-                <div className="score-desc">{result.wqi_status}</div>
-              </div>
-              <div className="track-wrap">
-                <div
-                  className="track-fill"
-                  style={{ width: `${trackPct}%`, background: wqiCol.track }}
-                />
-              </div>
-              <div className="track-labels">
-                <span>0</span>
-                <span>20</span>
-                <span>40</span>
-                <span>60</span>
-                <span>80</span>
-                <span>100</span>
-              </div>
-              <div className="badges">
-                {WQI_CLASSES.map((cls) => (
-                  <div
-                    key={cls}
-                    className={`badge ${cls === result.wqi_class ? "badge-act" : "badge-dim"}`}
-                    style={
-                      cls === result.wqi_class
-                        ? {
-                            color: wqiCol.hex,
-                            borderColor: wqiCol.hex,
-                            background: wqiCol.hex + "18",
-                          }
-                        : {}
-                    }
-                  >
-                    {cls}
-                    {cls === result.wqi_class ? " ←" : ""}
+          {showForm && (
+            <div className="form-body">
+              <div className="form-grid">
+                {FIELDS.map((field) => (
+                  <div key={field.name} className="form-field">
+                    <label className="form-label" htmlFor={field.name}>
+                      {field.label}
+                    </label>
+                    <input
+                      id={field.name}
+                      type="number"
+                      name={field.name}
+                      value={form[field.name]}
+                      onChange={handleChange}
+                      placeholder={field.placeholder}
+                      step="0.01"
+                      className="form-input"
+                    />
                   </div>
                 ))}
               </div>
-            </div>
 
-            <div className="card">
-              <div className="card-title">📋 Parameter Status</div>
-              {result.layer_b.param_report.map((p) => {
-                const pct = Math.min(
-                  Math.max(((p.value - p.min) / (p.max - p.min)) * 100, 0),
-                  100,
-                );
-                const col =
-                  p.status === "Within Range"
-                    ? "#1a6b3a"
-                    : p.severity === "Severe"
-                      ? "#dc2626"
-                      : "#d97706";
-                const arrow =
-                  p.status === "Within Range"
-                    ? "✓"
-                    : p.status === "Below Optimal"
-                      ? "↓"
-                      : "↑";
-                return (
-                  <div key={p.parameter} className="p-row">
-                    <span className="p-name">{shortName(p.parameter)}</span>
-                    <div className="p-track">
-                      <div
-                        className="p-fill"
-                        style={{ width: `${pct}%`, background: col }}
-                      />
-                    </div>
-                    <span className="p-score" style={{ color: col }}>
-                      {p.value} {p.unit} {arrow}
+              {error && (
+                <div className="error-msg" role="alert">
+                  {error}
+                </div>
+              )}
+
+              <button
+                onClick={handlePredict}
+                disabled={loading}
+                className="predict-btn"
+              >
+                {loading ? "Predicting…" : "⚡ Run Prediction"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════
+            RESULTS
+            ═══════════════════════════════════════════════════ */}
+        {result && (
+          <>
+            {/* ── ROW 1: WQI Score + Layer A ─────────────────── */}
+            <div className="row-2col">
+              {/* WQI Score card */}
+              <div className="card">
+                <div className="card-label" style={{ marginBottom: 12 }}>
+                  Predicted WQI
+                </div>
+
+                <div style={{ textAlign: "center", padding: "10px 0" }}>
+                  <div className="wqi-score-number" style={{ color: wqiColor }}>
+                    {result.wqi_score}
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <span
+                      className="wqi-badge"
+                      style={{
+                        color: wqiColor,
+                        borderColor: wqiColor + "44",
+                        backgroundColor: wqiColor + "22",
+                      }}
+                    >
+                      {result.wqi_class}
                     </span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: "#64748b" }}>
+                    {result.wqi_status}
+                  </div>
+                </div>
 
-          {/* ROW 2 — Layer A + Layer B */}
-          <div className="section grid-2">
-            <div className="card">
-              <div className="card-title">
-                📈 Layer A — Parameter Impact (SHAP)
-              </div>
-              <p className="card-sub">
-                Which parameter is affecting WQI most right now
-              </p>
-              {result.layer_a.map((d) => {
-                const pct = (d.magnitude / maxShap) * 100;
-                const col =
-                  d.direction === "Negative"
-                    ? SHAP_COLORS.negative
-                    : SHAP_COLORS.positive;
-                return (
-                  <div key={d.parameter} className="shap-row">
-                    <span className="shap-name">{shortName(d.parameter)}</span>
-                    <div className="shap-outer">
-                      <div
-                        className="shap-bar"
-                        style={{ width: `${pct}%`, background: col }}
-                      >
-                        <span className="shap-val">
-                          {d.direction === "Negative" ? "" : "+"}
-                          {d.shap.toFixed(3)}
+                <div className="card-divider" />
+
+                <div className="card-label" style={{ marginBottom: 8 }}>
+                  All parameters
+                </div>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                >
+                  {result.layer_b.param_report.map((p) => {
+                    const cls =
+                      p.status === "Within Range"
+                        ? "param-good"
+                        : p.severity === "Severe"
+                          ? "param-bad"
+                          : "param-warn";
+                    const arrow =
+                      p.status === "Within Range"
+                        ? " ✓"
+                        : p.status === "Below Optimal"
+                          ? " ↓"
+                          : " ↑";
+                    return (
+                      <div key={p.parameter} className="param-row">
+                        <span className="param-name">
+                          {shortName(p.parameter)}
+                        </span>
+                        <span className={`param-value ${cls}`}>
+                          {p.value} {p.unit}
+                          {arrow}
                         </span>
                       </div>
-                    </div>
-                    <span className="shap-dir" style={{ color: col }}>
-                      {d.direction === "Negative" ? "↓ hurting" : "↑ helping"}
-                    </span>
-                  </div>
-                );
-              })}
-              <div className="shap-note">
-                Primary issue:{" "}
-                <strong>
-                  {shortName(
-                    result.layer_a.find((d) => d.direction === "Negative")
-                      ?.parameter || result.layer_a[0].parameter,
-                  )}
-                </strong>{" "}
-                is the biggest drag on WQI right now.
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <div className="card">
-              <div className="card-title">
-                💡 Layer B — Management Recommendations
-              </div>
-              <p className="card-sub">Physical actions the farmer can take</p>
-              {result.layer_b.improvements.map((rec, i) => (
+              {/* Layer A card */}
+              <div className="card">
+                <div className="card-label" style={{ marginBottom: 12 }}>
+                  Layer A — parameter impact
+                  <span
+                    style={{
+                      color: "#475569",
+                      fontWeight: 400,
+                      marginLeft: 8,
+                      fontSize: 10,
+                    }}
+                  >
+                    SHAP values
+                  </span>
+                </div>
+
                 <div
-                  key={i}
-                  className="rec"
-                  style={{
-                    borderLeftColor: PRIORITY_BORDER[rec.priority] || "#1a6b3a",
-                  }}
+                  style={{ display: "flex", flexDirection: "column", gap: 9 }}
                 >
-                  <div
-                    className="rec-param"
-                    style={{
-                      color: PRIORITY_BORDER[rec.priority] || "#1a6b3a",
-                    }}
-                  >
-                    {rec.priority === "URGENT"
-                      ? "⚠️"
-                      : rec.priority === "HIGH"
-                        ? "⚠️"
-                        : "✅"}{" "}
-                    {rec.parameter}
-                    <span className="rec-priority-badge">{rec.priority}</span>
-                  </div>
-                  <div className="rec-obs">{rec.observation}</div>
-                  <div className="rec-action">→ {rec.action}</div>
-                  <div className="rec-detail">{rec.detail}</div>
+                  {result.layer_a.map((d) => {
+                    const pct = (d.magnitude / maxShap) * 50; // max 50% of track width per side
+                    return (
+                      <div key={d.parameter} className="shap-row">
+                        <span className="shap-name">
+                          {shortName(d.parameter)}
+                        </span>
+                        <div className="shap-track">
+                          <div className="shap-midline" />
+                          {d.direction === "Negative" ? (
+                            <div
+                              className="shap-bar-neg"
+                              style={{ width: `${pct}%` }}
+                            >
+                              <span className="shap-label-neg">
+                                {d.shap.toFixed(3)}
+                              </span>
+                            </div>
+                          ) : (
+                            <div
+                              className="shap-bar-pos"
+                              style={{ width: `${pct}%` }}
+                            >
+                              <span className="shap-label-pos">
+                                +{d.shap.toFixed(3)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* ROW 3 — Layer C full width */}
-          <div className="section">
-            <div className="card full-width">
-              <div className="card-title">
-                🧬 Layer C — Biological Validation
-              </div>
-              <p className="card-sub">
-                Does the predicted WQI correlate with actual catfish growth in
-                your dataset?
-              </p>
-              <div className="layer-c-grid">
-                <div className="lc-stat">
-                  <div className="lc-num" style={{ color: "#1a6b3a" }}>
-                    {result.layer_c?.model_r2?.toFixed(4) ?? "—"}
+                <div className="shap-legend">
+                  <div className="legend-item">
+                    <div
+                      className="legend-dot"
+                      style={{ background: "#7F1D1D" }}
+                    />
+                    <span className="legend-text">Hurting WQI</span>
                   </div>
-                  <div className="lc-label">Model R² (ANN)</div>
-                </div>
-                <div className="lc-stat">
-                  <div
-                    className="lc-num"
-                    style={{
-                      color:
-                        result.layer_c?.r_sgr != null
-                          ? Math.abs(result.layer_c.r_sgr) > 0.3
-                            ? "#1a6b3a"
-                            : "#d97706"
-                          : "#7aaa8a",
-                    }}
-                  >
-                    {result.layer_c?.r_sgr != null
-                      ? result.layer_c.r_sgr.toFixed(4)
-                      : "—"}
+                  <div className="legend-item">
+                    <div
+                      className="legend-dot"
+                      style={{ background: "#166534" }}
+                    />
+                    <span className="legend-text">Helping WQI</span>
                   </div>
-                  <div className="lc-label">WQI vs SGR (r)</div>
                 </div>
-                <div className="lc-stat">
-                  <div
-                    className="lc-num"
-                    style={{
-                      color:
-                        result.layer_c?.p_sgr != null
-                          ? result.layer_c.p_sgr < 0.05
-                            ? "#1a6b3a"
-                            : "#dc2626"
-                          : "#7aaa8a",
-                    }}
-                  >
-                    {result.layer_c?.p_sgr != null
-                      ? result.layer_c.p_sgr.toFixed(4)
-                      : "—"}
-                  </div>
-                  <div className="lc-label">p-value (SGR)</div>
-                </div>
-                <div className="lc-stat">
-                  <div className="lc-num" style={{ color: "#2d9e5f" }}>
-                    {result.layer_c?.r_k != null
-                      ? result.layer_c.r_k.toFixed(4)
-                      : "—"}
-                  </div>
-                  <div className="lc-label">WQI vs Condition K (r)</div>
-                </div>
-              </div>
-              <div className="lc-note">
-                {result.layer_c?.p_sgr != null &&
-                result.layer_c.p_sgr < 0.05 &&
-                result.layer_c.r_sgr > 0
-                  ? "✅ Validated: Higher WQI is statistically associated with better catfish growth in your dataset."
-                  : result.layer_c?.p_sgr != null &&
-                      result.layer_c.p_sgr >= 0.05
-                    ? "⚠ WQI–growth correlation is not significant. Growth may also be influenced by unmeasured variables (feeding rate, stocking density)."
-                    : "Run Layer C cells in catfish_layers_ABC.ipynb and STEP1_add_to_notebook.py to populate this section."}
               </div>
             </div>
-          </div>
 
-          <div
-            className="section"
-            style={{ textAlign: "center", paddingBottom: 32 }}
-          >
-            <button className="btn-reset" onClick={handleReset}>
-              ↺ New Prediction
+            <div
+              className={`card ${
+                result.layer_b.improvements[0]?.priority === "URGENT"
+                  ? "card-alert-red"
+                  : result.layer_b.improvements[0]?.priority === "HIGH"
+                    ? "card-alert-amber"
+                    : ""
+              }`}
+            >
+              <div
+                className="card-label card-label-danger"
+                style={{ marginBottom: 12 }}
+              >
+                ⚠ Layer B — recommended actions
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {result.layer_b.improvements.map((rec, i) => {
+                  const pClass =
+                    PRIORITY_CLASS[rec.priority] || PRIORITY_CLASS["ROUTINE"];
+                  return (
+                    <div key={i} className={`rec-card ${pClass.card}`}>
+                      <div className="rec-header">
+                        <span className={`rec-badge ${pClass.badge}`}>
+                          {rec.priority}
+                        </span>
+                        <span className={`rec-param ${pClass.param}`}>
+                          {rec.parameter}
+                        </span>
+                      </div>
+                      <div className="rec-observation">{rec.observation}</div>
+                      <div className="rec-action">→ {rec.action}</div>
+                      <div className="rec-detail">{rec.detail}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button onClick={handleReset} className="reset-btn">
+              ← New prediction
             </button>
-          </div>
-        </div>
-      )}
-
-      <footer className="footer">
-        CatfishIQ v1.0 — AHP-weighted WQI · ANN Model · Layers A, B, C
-      </footer>
+          </>
+        )}
+      </main>
     </div>
   );
 }
